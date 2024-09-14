@@ -10,6 +10,6 @@ node server.js at server folder
 
 # For running client
 
-node client.js <public-key server>
+node client.js [public-key]
 
 
