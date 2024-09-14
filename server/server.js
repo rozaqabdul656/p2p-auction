@@ -14,7 +14,11 @@ const hbee = new Hyperbee(auctionCore, { valueEncoding: 'json' });
 // Start server with DHT and RPC
 async function startServer() {
   // Start Distributed Hash Table (DHT)
-  const dhtSeed = crypto.randomBytes(32);
+  let dhtSeed =(await hbee.get('dht-seeds'))?.value;
+  if (!dhtSeed) {
+    dhtSeed = crypto.randomBytes(32);
+    await hbee.put('dht-seeds', dhtSeed);
+  }
   const dht = new DHT({
     port: 40001,
     keyPair: DHT.keyPair(dhtSeed),
@@ -22,7 +26,7 @@ async function startServer() {
   });
 
   // Resolve RPC server seed from Hyperbee
-  let rpcSeed = crypto.randomBytes(32);
+  let rpcSeed = (await hbee.get('rpc-seeds'))?.value;
   if (!rpcSeed) {
     rpcSeed = crypto.randomBytes(32);
     await hbee.put('rpc-seeds', rpcSeed);
