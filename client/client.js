@@ -45,20 +45,25 @@ async function startClient() {
   // Handle responses from peers
   client.rpc.respond('openAuction', async (encodedAuction) => {
     const auction = helper.decode(encodedAuction);
-    await hbee.put(`auction/${auction.item}`, encode(auction));
+
     console.log('New auction opened:', auction);
   });
 
   client.rpc.respond('makeBid', async (encodedBid) => {
     const bid = helper.decode(encodedBid);
-    await hbee.put(`bid/${bid.item}/${bid.clientId}`, encode(bid));
+
     console.log('New bid placed:', bid);
   });
 
   client.rpc.respond('closeAuction', async (encodedClosure) => {
     const closure = helper.decode(encodedClosure);
-    await hbee.put(`closedAuction/${auctionDetails.item}`, encode(auctionDetails));
+
     console.log('Auction closed:', closure);
+      // Store winner information in Hyperbee
+    await hbee.put(`winner/${closure.auction}`, encode({
+      winnerId: closure.winner,
+      finalPrice: closure.finalPrice
+    }));
   });
 
   return client;

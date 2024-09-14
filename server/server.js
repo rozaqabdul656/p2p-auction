@@ -46,16 +46,26 @@ async function startServer() {
   server.respond('openAuction', async (encodedAuction, rpc) => {
     const auction = helper.decode(encodedAuction);
     console.log('Auction received from client:', auction);
+    const existingAuction = await hbee.get(`auction/${auction.item}`);
+    if (existingAuction) {
+      throw new Error(`Auction for ${auction.item} already exists.`);
+    }
 
-    broadcast(rpc, 'openAuction');
+    await hbee.put(`auction/${auction.item}`, helper.encode(auction));
+    broadcast(rpc, 'openAuction', auction);
   });
 
   // Handle bid submissions from clients
   server.respond('makeBid', async (encodedBid, rpc) => {
     const bid = helper.decode(encodedBid);
     console.log('Bid received from client:', bid);
-
-    broadcast(rpc, 'makeBid');
+    // Check if the auction item is closed
+    const closedAuction = await hbee.get(`closedAuction/${bid.item}`);
+    if (closedAuction) {
+      throw new Error(`Auction for ${bid.item} is already closed.`);
+    }
+    await hbee.put(`bid/${bid.item}/${bid.clientId}`, helper.encode(bid));
+    broadcast(rpc, 'makeBid', bid);
   });
 
   // Handle auction closure requests from clients
@@ -63,17 +73,28 @@ async function startServer() {
     const auctionDetails = helper.decode(encodedAuction);
     console.log('Auction closed:', auctionDetails);
 
-    broadcast(rpc, 'closeAuction');
+    // Check if the auction item is already closed
+    const existingAuction = await hbee.get(`auction/${auctionDetails.auction}`);
+    if (!existingAuction) {
+      throw new Error(`Auction for ${auctionDetails.auction} does not exist.`);
+    }
+    // del to auction items
+    await hbee.del(`auction/${auctionDetails.auction}`);
+
+    //put closed auction
+    await hbee.put(`closedAuction/${auctionDetails.item}`, helper.encode(auctionDetails));
+    broadcast(rpc, 'closeAuction', auctionDetails);
   });
 
   process.on('SIGINT', async () => {
+    console.log("Shutting down server...")
     await rpcServer.destroy();
     await hbee.close();
     process.exit();
   });
 }
 
-function broadcast(rpc, type){
+function broadcast(rpc, type, bid){
     // Broadcast the bid to all other connected clients
     for (const peer of server.connections) {
       if (peer !== rpc) {
