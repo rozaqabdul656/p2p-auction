@@ -7,9 +7,9 @@ const path = require('path');
 const helper = require('./helper/index');
 
 // Initialize Hypercore and Hyperbee for persistent storage
-const auctionCore = new Hypercore(path.join(__dirname, 'server_auctions'), { valueEncoding: 'json' });
-const hbee = new Hyperbee(auctionCore, { valueEncoding: 'json' });
-
+const auctionCore = new Hypercore(path.join(__dirname, 'server_auctions'));
+const hbee = new Hyperbee(auctionCore, { keyEncoding: 'utf-8', valueEncoding: 'binary' });
+let server;
 
 // Start server with DHT and RPC
 async function startServer() {
@@ -36,7 +36,7 @@ async function startServer() {
   const rpcServer = new HyperswarmRPC({ seed: rpcSeed, dht });
 
   // Start listening for incoming connections on the server
-  const server = rpcServer.createServer();
+  server = rpcServer.createServer();
   await server.listen();
   console.log('RPC server listening with public key:', server.publicKey.toString('hex'));
 
@@ -47,12 +47,7 @@ async function startServer() {
     const auction = helper.decode(encodedAuction);
     console.log('Auction received from client:', auction);
 
-    // Broadcast the auction to all other connected clients
-    for (const peer of server.connections) {
-      if (peer !== rpc) {
-        peer.request('openAuction', helper.encode(auction));
-      }
-    }
+    broadcast(rpc, 'openAuction');
   });
 
   // Handle bid submissions from clients
@@ -60,12 +55,7 @@ async function startServer() {
     const bid = helper.decode(encodedBid);
     console.log('Bid received from client:', bid);
 
-    // Broadcast the bid to all other connected clients
-    for (const peer of server.connections) {
-      if (peer !== rpc) {
-        peer.request('makeBid', helper.encode(bid));
-      }
-    }
+    broadcast(rpc, 'makeBid');
   });
 
   // Handle auction closure requests from clients
@@ -73,13 +63,23 @@ async function startServer() {
     const auctionDetails = helper.decode(encodedAuction);
     console.log('Auction closed:', auctionDetails);
 
-    // Broadcast auction closure to all other connected clients
+    broadcast(rpc, 'closeAuction');
+  });
+
+  process.on('SIGINT', async () => {
+    await rpcServer.destroy();
+    await hbee.close();
+    process.exit();
+  });
+}
+
+function broadcast(rpc, type){
+    // Broadcast the bid to all other connected clients
     for (const peer of server.connections) {
       if (peer !== rpc) {
-        peer.request('closeAuction', helper.encode(auctionDetails));
+        peer.request(type, helper.encode(bid));
       }
     }
-  });
 }
 
 // Start the auction server

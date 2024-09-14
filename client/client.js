@@ -7,8 +7,8 @@ const path = require('path');
 const helper = require('./helper/index');
 
 // Initialize Hypercore and Hyperbee for persistent storage
-const auctionCore = new Hypercore(path.join(__dirname, 'client_auctions'), { valueEncoding: 'json' });
-const hbee = new Hyperbee(auctionCore, { valueEncoding: 'json' });
+const auctionCore = new Hypercore(path.join(__dirname, 'client_auctions'));
+const hbee = new Hyperbee(auctionCore,{ keyEncoding: 'utf-8', valueEncoding: 'binary' });
 
 
 // Start client with DHT and RPC
@@ -16,8 +16,8 @@ async function startClient() {
   if (!process.argv[2]){
     throw new Error('Please provide public key as parameter')
   }
+
   // Start Distributed Hash Table (DHT)
-    // Resolve RPC client seed from Hyperbee
   let dhtSeed = (await hbee.get('dht-seeds'))?.value;
   if (!dhtSeed) {
     dhtSeed = crypto.randomBytes(32);
@@ -45,16 +45,19 @@ async function startClient() {
   // Handle responses from peers
   client.rpc.respond('openAuction', async (encodedAuction) => {
     const auction = helper.decode(encodedAuction);
+    await hbee.put(`auction/${auction.item}`, encode(auction));
     console.log('New auction opened:', auction);
   });
 
   client.rpc.respond('makeBid', async (encodedBid) => {
     const bid = helper.decode(encodedBid);
+    await hbee.put(`bid/${bid.item}/${bid.clientId}`, encode(bid));
     console.log('New bid placed:', bid);
   });
 
   client.rpc.respond('closeAuction', async (encodedClosure) => {
     const closure = helper.decode(encodedClosure);
+    await hbee.put(`closedAuction/${auctionDetails.item}`, encode(auctionDetails));
     console.log('Auction closed:', closure);
   });
 
